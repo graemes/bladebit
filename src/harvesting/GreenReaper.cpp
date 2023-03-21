@@ -1115,7 +1115,8 @@ ForwardPropResult ForwardPropTable( GreenReaperContext& cx, uint32 tableGroupCou
         metaRight = metaRight.Slice( matchCount );
     }
 
-    SortTableAndFlipBuffers<rTable>( cx, tableGroupCount );
+    const uint32 groupsToFlip = std::max( 1u, tableGroupCount / 2 );
+    SortTableAndFlipBuffers<rTable>( cx, groupsToFlip );
 
     // The last table makes no group entries, it should simply have a single match
     // if( rTable == TableId::Table6 )
@@ -1211,18 +1212,13 @@ struct GRMatchJob : MTJob<GRMatchJob>
 //-----------------------------------------------------------
 Span<Pair> Match( GreenReaperContext& cx, const Span<uint64> yEntries, Span<Pair> outputPairs, const uint32 pairOffset )
 {
-    // Each thread must a minimum # of entries, otherwise, single-thread it
-    uint32 groupThreadCount = std::min( cx.config.threadCount, (uint32)yEntries.Length() );
-    while( groupThreadCount > 1 && yEntries.Length() / groupThreadCount < 512 )
-        groupThreadCount--;
-
     ASSERT( yEntries.length <= 0xFFFFFFFF );
     ASSERT( cx.groupsBoundaries.length <= 0xFFFFFFFF );
 
     // Get the group boundaries and the adjusted thread count
     const uint64 groupCount = ScanBCGroupMT32( 
         *cx.pool,
-        groupThreadCount,
+        cx.config.threadCount,
         yEntries.Ptr(),
         (uint32)yEntries.Length(),
         cx.xBufferTmp.Ptr(),
